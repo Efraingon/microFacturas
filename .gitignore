@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.pnpm-store/
+.env.local
+.env.*.local
+/IMG_20261009_160645.jpg
+/Sin título.png
