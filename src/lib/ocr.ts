@@ -1,5 +1,6 @@
 import { createWorker, PSM } from 'tesseract.js'
 import type { ReceiptDraft } from '../types'
+import { detectVenezuelanBank } from './banks'
 
 function loadImage(source: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -138,8 +139,10 @@ function parseReceipt(text: string): Partial<ReceiptDraft> {
   const explicitAmount = parseAmount(amountText)
   const genericAmount = parseAmount(findMatch(normalized, [/\b(\d{1,3}(?:[.,]\d{2}))\b/]))
   const amount = explicitAmount ?? (genericAmount !== undefined && genericAmount >= 10 ? genericAmount : undefined)
-  const bankLine = lines.find((line) => /\bbanco\b/i.test(line))
-  const bank = bankLine ? bankLine.replace(/^.*?\bbanco\b\s*/i, '').trim() ? `BANCO ${bankLine.replace(/^.*?\bbanco\b\s*/i, '').trim()}` : 'BANCO' : findMatch(normalized, [/(?:banco|tarjeta)\s*[:#-]?\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]{2,})/i])
+  const bank = detectVenezuelanBank(normalized) || (() => {
+    const bankLine = lines.find((line) => /\bbanco\b/i.test(line))
+    return bankLine ? bankLine.replace(/^.*?\bbanco\b\s*/i, '').trim() ? `BANCO ${bankLine.replace(/^.*?\bbanco\b\s*/i, '').trim()}` : 'BANCO' : findMatch(normalized, [/(?:banco|tarjeta)\s*[:#-]?\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]{2,})/i])
+  })()
   const headerStop = /\b(venta|d[eé]bito|cr[eé]dito|fecha|banco|maestro|rif|r\.?i\.?f\.?)\b/i
   const header = lines.slice(0, 6).filter((line) => !headerStop.test(line) && !/\d{4,}/.test(line)).slice(0, 3)
   const rawLocation = header.join(' ').replace(/\s+/g, ' ').trim()
