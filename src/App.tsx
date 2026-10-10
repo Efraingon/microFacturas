@@ -12,6 +12,10 @@ const money = new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'VES
 
 export default function App() {
   const [records, setRecords] = useState<Receipt[]>([])
+  const [cloudQueryResults, setCloudQueryResults] = useState<Receipt[] | null>(null)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [cloudQueryBusy, setCloudQueryBusy] = useState(false)
   const [draft, setDraft] = useState<ReceiptDraft>(emptyDraft)
   const [modal, setModal] = useState(false)
   const [ocrBusy, setOcrBusy] = useState(false)
@@ -60,14 +64,16 @@ export default function App() {
     const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
       const sessionUser = session?.user
       setUser(sessionUser ? { id: sessionUser.id, email: sessionUser.email } : null)
+      setCloudQueryResults(null)
       if (sessionUser) void hydrate(sessionUser.id)
       else void getLocalReceipts().then((items) => setRecords(items.filter((item) => !item.synced)))
     })
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  const filtered = useMemo(() => records.filter((item) => `${item.receiptNumber} ${item.location} ${item.bank} ${item.date}`.toLowerCase().includes(query.toLowerCase())), [records, query])
-  const total = records.reduce((sum, item) => sum + item.amount, 0)
+  const visibleRecords = cloudQueryResults ?? records
+  const filtered = useMemo(() => visibleRecords.filter((item) => `${item.receiptNumber} ${item.location} ${item.bank} ${item.date}`.toLowerCase().includes(query.toLowerCase())), [visibleRecords, query])
+  const total = visibleRecords.reduce((sum, item) => sum + item.amount, 0)
 
   async function chooseImage(file?: File) {
     if (!file) return
@@ -188,8 +194,48 @@ export default function App() {
 
   async function signOut() { await supabase?.auth.signOut(); setMessage('Sesión cerrada.') }
 
+  async function queryCloudReceipts() {
+    if (!supabase || !user) {
+      setMessage('Ingresa a tu cuenta para consultar comprobantes en la nube.')
+      return
+    }
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      setMessage('La fecha inicial no puede ser posterior a la fecha final.')
+      return
+    }
+    setCloudQueryBusy(true)
+    setMessage('')
+    try {
+      let request = supabase.from('receipts').select('*').eq('user_id', user.id)
+      if (dateFrom) request = request.gte('date', dateFrom)
+      if (dateTo) request = request.lte('date', dateTo)
+      const { data, error } = await request.order('date', { ascending: false }).order('created_at', { ascending: false })
+      if (error) throw error
+      const local = await getLocalReceipts()
+      const localById = new Map(local.map((receipt) => [receipt.id, receipt]))
+      const results: Receipt[] = (data ?? []).map((row) => ({
+        id: row.id, date: row.date, receiptNumber: row.receipt_number, location: row.location,
+        amount: Number(row.amount), bank: row.bank, image: localById.get(row.id)?.image ?? '',
+        createdAt: row.created_at, ownerId: row.user_id, synced: true,
+      }))
+      setCloudQueryResults(results)
+      setMessage(`Consulta completada: ${results.length} comprobante${results.length === 1 ? '' : 's'} encontrado${results.length === 1 ? '' : 's'} en la nube.`)
+    } catch (error) {
+      setMessage(`No se pudo consultar la nube: ${error instanceof Error ? error.message : 'verifica tu conexión e inténtalo de nuevo.'}`)
+    } finally {
+      setCloudQueryBusy(false)
+    }
+  }
+
+  function clearCloudQuery() {
+    setCloudQueryResults(null)
+    setDateFrom('')
+    setDateTo('')
+    setMessage('Se muestra nuevamente la lista completa de comprobantes.')
+  }
+
   function exportExcel() {
-    const rows = records.map(({ date, receiptNumber, location, amount }) => ({ Fecha: date, 'Número de comprobante': receiptNumber, Local: location, Monto: amount }))
+    const rows = filtered.map(({ date, receiptNumber, location, amount }) => ({ Fecha: date, 'Número de comprobante': receiptNumber, Local: location, Monto: amount }))
     const sheet = XLSX.utils.json_to_sheet(rows, { header: ['Fecha', 'Número de comprobante', 'Local', 'Monto'] })
     sheet['!cols'] = [{ wch: 14 }, { wch: 25 }, { wch: 28 }, { wch: 18 }]
     const book = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book, sheet, 'Comprobantes'); XLSX.writeFile(book, `comprobantes-${new Date().toISOString().slice(0, 10)}.xlsx`)
@@ -210,12 +256,13 @@ export default function App() {
     <main className="main-content">
       <header className="topbar"><div className="breadcrumb">Espacio de trabajo <span>/</span> <b>Comprobantes</b></div><div className="top-actions">{!user && <button type="button" className="button secondary small cloud-access" aria-label="Ingresar o crear cuenta" onClick={() => openAuth()}><Cloud size={16} /><span>Ingresar o crear cuenta</span></button>}{user && <span className="cloud-user-label"><Cloud size={15} /> Nube conectada</span>}<button className="button primary small" onClick={() => fileInput.current?.click()}><Plus size={17} /> Nuevo comprobante</button></div></header>
       <section className="page">
-        <div className="page-heading"><div><div className="eyebrow">REGISTRO DE PAGOS</div><h1>Comprobantes</h1><p className="subheading">Digitaliza, revisa y organiza los pagos de tus puntos de venta.</p></div><button className="button outline" onClick={exportExcel} disabled={!records.length}><ArrowDownToLine size={17} /> Exportar Excel</button></div>
+        <div className="page-heading"><div><div className="eyebrow">REGISTRO DE PAGOS</div><h1>Comprobantes</h1><p className="subheading">Digitaliza, revisa y organiza los pagos de tus puntos de venta.</p></div><button className="button outline" onClick={exportExcel} disabled={!filtered.length}><ArrowDownToLine size={17} /> Exportar Excel</button></div>
       <section className="app-banner" aria-label="Resumen de MicroFacturas"><div className="banner-icon animated-receipt"><ReceiptText size={27} strokeWidth={1.8} /><span className="receipt-coin">Bs</span></div><div className="banner-copy"><div className="banner-eyebrow">GESTIÓN DE PUNTOS DE VENTA</div><h2>Facturación organizada, sin complicaciones</h2><p>Registra comprobantes desde el teléfono o la computadora. Revisa cada dato y guarda tu información.</p></div><div className={`banner-sync ${user ? 'connected' : ''}`}><div className="banner-sync-icon"><Cloud size={17} /></div><div><b>{user ? 'Respaldo en la nube activo' : 'Listo para respaldo en la nube'}</b><small>{user ? user.email : supabase ? 'Usa tu cuenta MicroFacturas en este equipo' : 'En este navegador; también funciona en PC'}</small></div>{!user && <button type="button" className="banner-connect" onClick={() => openAuth()}>Ingresar</button>}</div></section>
-        {message && <div className={`notice ${/guardado|sesión iniciada/i.test(message) ? 'success' : /no se pudo|no se completó|no se pudieron/i.test(message) ? 'error' : ''}`} role="status"><span>{message}</span><button aria-label="Cerrar aviso" onClick={() => setMessage('')}><X size={15} /></button></div>}
-        <div className="stats-row"><div className="stat-card"><span className="stat-icon blue"><FileSpreadsheet size={19} /></span><div><small>Comprobantes registrados</small><b>{records.length}</b></div><span className="stat-foot">En este dispositivo</span></div><div className="stat-card"><span className="stat-icon green"><span className="bolivar">Bs</span></span><div><small>Monto acumulado</small><b>{money.format(total)}</b></div><span className="stat-foot">Total registrado</span></div><div className="stat-card cloud-stat"><span className="stat-icon violet"><Cloud size={19} /></span><div><small>Respaldo en la nube</small><b>{user ? 'Conectado' : 'Desconectado'}</b></div><span className="stat-foot">{user ? 'Sincroniza al guardar' : 'Inicia sesión para activar'}</span></div></div>
-        <section className="records-panel"><div className="panel-heading"><div><h2>Todos los comprobantes</h2><p>Consulta los pagos registrados recientemente.</p></div><label className="search-box"><Search size={16} /><input placeholder="Buscar por número, local..." value={query} onChange={(event) => setQuery(event.target.value)} /></label></div>
-          {!records.length ? <div className="empty-state"><div className="welcome-kicker"><span className="welcome-dot" /> EMPIEZA EN UN MOMENTO</div><div className="empty-art"><div className="paper"><span /><span /><span /><i>Bs</i></div><span className="sparkle one">✦</span><span className="sparkle two">✦</span></div><h3>Registra tu primer comprobante</h3><p>Fotografía o selecciona el recibo del punto de venta. Revisarás los datos antes de guardarlos.</p><button className="button primary" onClick={() => fileInput.current?.click()}><Camera size={17} /> Cargar comprobante</button><div className="privacy-note"><ShieldCheck size={14} /> Lectura y datos guardados en este dispositivo</div></div> : <div className="table-wrap"><table><thead><tr><th>FECHA</th><th>NÚMERO DE COMPROBANTE</th><th>LOCAL</th><th>MONTO</th><th>RESPALDO</th><th></th></tr></thead><tbody>{filtered.map((item) => <tr key={item.id}><td>{new Date(`${item.date}T12:00:00`).toLocaleDateString('es-VE')}</td><td><b className="receipt-number">{item.receiptNumber || 'Sin número'}</b><small className="bank-cell">{item.bank || 'Banco no indicado'}</small></td><td>{item.location || 'Local sin nombre'}</td><td className="amount-cell">{money.format(item.amount)}</td><td><span className={`sync-pill ${item.synced ? 'synced' : ''}`}><span />{item.synced ? 'En la nube' : 'Solo local'}</span></td><td><button className="icon-button danger" title="Eliminar" onClick={() => void removeReceipt(item)}><Trash2 size={16} /></button></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="no-results">No hay comprobantes que coincidan con la búsqueda.</div>}</div>}
+        {message && <div className={`notice ${/guardado|sesión iniciada|consulta completada|lista completa/i.test(message) ? 'success' : /no se pudo|no se completó|no se pudieron|no puede ser posterior/i.test(message) ? 'error' : ''}`} role="status"><span>{message}</span><button aria-label="Cerrar aviso" onClick={() => setMessage('')}><X size={15} /></button></div>}
+        <div className="stats-row"><div className="stat-card"><span className="stat-icon blue"><FileSpreadsheet size={19} /></span><div><small>Comprobantes mostrados</small><b>{visibleRecords.length}</b></div><span className="stat-foot">{cloudQueryResults !== null ? 'Resultado de la nube' : 'En este dispositivo'}</span></div><div className="stat-card"><span className="stat-icon green"><span className="bolivar">Bs</span></span><div><small>Monto del listado</small><b>{money.format(total)}</b></div><span className="stat-foot">{cloudQueryResults !== null ? 'Período consultado' : 'Total registrado'}</span></div><div className="stat-card cloud-stat"><span className="stat-icon violet"><Cloud size={19} /></span><div><small>Respaldo en la nube</small><b>{user ? 'Conectado' : 'Desconectado'}</b></div><span className="stat-foot">{user ? 'Sincroniza al guardar' : 'Inicia sesión para activar'}</span></div></div>
+        <section className="records-panel"><div className="panel-heading"><div><h2>{cloudQueryResults === null ? 'Todos los comprobantes' : 'Resultados de la nube'}</h2><p>{cloudQueryResults === null ? 'Consulta los pagos registrados recientemente.' : `${visibleRecords.length} comprobante${visibleRecords.length === 1 ? '' : 's'} para el período consultado.`}</p></div><label className="search-box"><Search size={16} /><input placeholder="Buscar por número, local..." value={query} onChange={(event) => setQuery(event.target.value)} /></label></div>
+          {user && <div className="cloud-date-query"><div className="cloud-query-copy"><b>Consultar comprobantes en la nube</b><small>Filtra por fecha de registro y exporta los resultados a Excel.</small></div><label>Desde<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label><label>Hasta<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label><button type="button" className="button primary query-button" onClick={() => void queryCloudReceipts()} disabled={cloudQueryBusy}>{cloudQueryBusy ? <LoaderCircle size={15} className="spin" /> : <Search size={15} />}{cloudQueryBusy ? 'Consultando…' : 'Consultar'}</button>{cloudQueryResults !== null && <button type="button" className="button secondary query-clear" onClick={clearCloudQuery} disabled={cloudQueryBusy}>Limpiar</button>}</div>}
+          {cloudQueryResults !== null && !visibleRecords.length ? <div className="no-results">No hay comprobantes en la nube para las fechas seleccionadas.</div> : !visibleRecords.length ? <div className="empty-state"><div className="welcome-kicker"><span className="welcome-dot" /> EMPIEZA EN UN MOMENTO</div><div className="empty-art"><div className="paper"><span /><span /><span /><i>Bs</i></div><span className="sparkle one">✦</span><span className="sparkle two">✦</span></div><h3>Registra tu primer comprobante</h3><p>Fotografía o selecciona el recibo del punto de venta. Revisarás los datos antes de guardarlos.</p><button className="button primary" onClick={() => fileInput.current?.click()}><Camera size={17} /> Cargar comprobante</button><div className="privacy-note"><ShieldCheck size={14} /> Lectura y datos guardados en este dispositivo</div></div> : <div className="table-wrap"><table><thead><tr><th>FECHA</th><th>NÚMERO DE COMPROBANTE</th><th>LOCAL</th><th>MONTO</th><th>RESPALDO</th><th></th></tr></thead><tbody>{filtered.map((item) => <tr key={item.id}><td>{new Date(`${item.date}T12:00:00`).toLocaleDateString('es-VE')}</td><td><b className="receipt-number">{item.receiptNumber || 'Sin número'}</b><small className="bank-cell">{item.bank || 'Banco no indicado'}</small></td><td>{item.location || 'Local sin nombre'}</td><td className="amount-cell">{money.format(item.amount)}</td><td><span className={`sync-pill ${item.synced ? 'synced' : ''}`}><span />{item.synced ? 'En la nube' : 'Solo local'}</span></td><td><button className="icon-button danger" title="Eliminar" onClick={() => void removeReceipt(item)}><Trash2 size={16} /></button></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="no-results">No hay comprobantes que coincidan con la búsqueda.</div>}</div>}
         </section>
         <div className="bottom-tip"><Sparkles size={15} /><span>La lectura automática puede equivocarse. Confirma los datos con el comprobante original antes de guardar.</span></div>
       </section>

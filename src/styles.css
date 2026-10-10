@@ -96,6 +96,15 @@ button:focus-visible, input:focus-visible { outline: 3px solid #6fb3ad; outline-
 .stat-foot { position: absolute; right: 13px; bottom: 11px; font-size: 8px; color: #647281; }
 .records-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-height: 350px; box-shadow: 0 1px 2px #15293508; }
 .panel-heading { padding: 18px 20px; border-bottom: 1px solid #e9edef; display: flex; align-items: center; justify-content: space-between; }
+.cloud-date-query { display: grid; grid-template-columns: minmax(190px, 1fr) minmax(130px, 160px) minmax(130px, 160px) auto auto; align-items: end; gap: 10px; padding: 13px 20px; border-bottom: 1px solid #e9edef; background: #fbfcfa; }
+.cloud-query-copy { align-self: center; }
+.cloud-query-copy b, .cloud-query-copy small { display: block; }
+.cloud-query-copy b { color: #34483f; font-size: 10px; }
+.cloud-query-copy small { color: #56675f; font-size: 9px; margin-top: 4px; line-height: 1.45; }
+.cloud-date-query label { display: grid; gap: 4px; color: #435262; font-size: 9px; font-weight: 650; }
+.cloud-date-query input { min-width: 0; height: 34px; border: 1px solid #cbd2cb; border-radius: 5px; padding: 0 7px; outline: none; color: #2b3948; background: #fdfcf8; font-size: 10px; }
+.cloud-date-query input:focus { border-color: var(--focus); box-shadow: 0 0 0 3px #17665f20; }
+.query-button, .query-clear { min-height: 34px; white-space: nowrap; }
 .panel-heading h2 { font-size: 13px; margin: 0; letter-spacing: -.15px; }
 .panel-heading p { color: var(--muted); font-size: 10px; margin: 4px 0 0; }
 .search-box { height: 34px; border: 1px solid #cbd5d9; border-radius: 5px; padding: 0 9px; display: flex; align-items: center; gap: 7px; color: #647281; width: 230px; }
@@ -187,7 +196,7 @@ td small.bank-cell { display: block; color: #5d6b79; font-size: 9px; margin-top:
 .button.full { width: 100%; margin-top: 4px; }
 .create-account { border: 0; background: none; color: var(--primary); font-size: 10px; font-weight: 700; }
 .create-account:disabled { opacity: .5; }
-@media (max-width: 900px) { .sidebar { width: 210px; } .main-content { margin-left: 210px; } .page { padding: 30px 24px; } .topbar { padding: 0 24px; } .stats-row { grid-template-columns: repeat(2, 1fr); } .cloud-stat { display: none; } .app-banner { grid-template-columns: 44px minmax(0, 1fr); } .banner-sync { grid-column: 1 / -1; } }
+@media (max-width: 900px) { .sidebar { width: 210px; } .main-content { margin-left: 210px; } .page { padding: 30px 24px; } .topbar { padding: 0 24px; } .stats-row { grid-template-columns: repeat(2, 1fr); } .cloud-stat { display: none; } .app-banner { grid-template-columns: 44px minmax(0, 1fr); } .banner-sync { grid-column: 1 / -1; } .cloud-date-query { grid-template-columns: minmax(150px, 1fr) 1fr 1fr; } .cloud-query-copy { grid-column: 1 / -1; } .query-button, .query-clear { width: 100%; } }
 @media (max-width: 650px) {
   .sidebar { position: static; width: auto; height: auto; padding: 12px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
   .brand { padding: 0; }
@@ -220,6 +229,11 @@ td small.bank-cell { display: block; color: #5d6b79; font-size: 9px; margin-top:
   .panel-heading { padding: 14px; display: block; }
   .panel-heading h2 { font-size: 12px; }
   .search-box { margin-top: 11px; width: 100%; }
+  .cloud-date-query { grid-template-columns: 1fr 1fr; gap: 8px; padding: 13px 14px; }
+  .cloud-date-query .cloud-query-copy { grid-column: 1 / -1; }
+  .cloud-date-query label { min-width: 0; }
+  .cloud-date-query input { width: 100%; }
+  .cloud-date-query .query-button, .cloud-date-query .query-clear { grid-column: span 1; min-width: 0; padding: 8px 6px; font-size: 9px; }
   .empty-state { padding-top: 31px; }
   .bottom-tip { font-size: 8px; line-height: 1.5; }
   .modal-backdrop { padding: 10px; align-items: end; }
