@@ -2,15 +2,15 @@
   color-scheme: light;
   font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: #1e2935;
-  background: #f0f1ec;
+  background: #e5e8e1;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   --ink: #1e2935;
   --muted: #657383;
   --subtle: #82909e;
-  --line: #e1e7e9;
+  --line: #d8dfda;
   --surface: #f8f7f1;
-  --canvas: #f0f1ec;
+  --canvas: #e5e8e1;
   --primary: #17665f;
   --primary-hover: #10554f;
   --primary-soft: #e9f4f2;
