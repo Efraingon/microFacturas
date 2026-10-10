@@ -51,6 +51,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid #6fb3ad; outline-
 .breadcrumb span { margin: 0 9px; color: #a1acb5; }
 .breadcrumb b { color: #334253; }
 .top-actions { display: flex; gap: 9px; }
+.cloud-user-label { display: inline-flex; align-items: center; gap: 6px; color: #286444; font-size: 10px; font-weight: 650; }
 .page { max-width: 1170px; padding: 39px 42px 24px; margin: 0 auto; }
 .page-heading { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 25px; }
 .eyebrow { font-size: 9px; letter-spacing: 1.1px; font-weight: 750; color: #3b7771; margin-bottom: 7px; }
@@ -172,6 +173,9 @@ td small.bank-cell { display: block; color: #5d6b79; font-size: 9px; margin-top:
 .modal-footer > span { margin-right: auto; font-size: 9px; color: #4e5e6b; display: flex; align-items: center; gap: 5px; }
 .modal-footer > span svg { color: #32764e; }
 .auth-modal { width: min(390px, 100%); padding-bottom: 19px; }
+.auth-backdrop { z-index: 30; }
+.auth-status { margin: 0 23px 14px; padding: 10px 11px; border: 1px solid #ebc9c6; border-radius: 6px; background: #fff4f2; color: #813936; font-size: 10px; line-height: 1.5; }
+.auth-status.success { border-color: #b9d9c4; background: #eff8f1; color: #245d3b; }
 .result-modal { width: min(420px, 100%); padding: 30px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-align: center; box-shadow: 0 20px 70px #10243a38; }
 .result-symbol { width: 54px; height: 54px; display: grid; place-items: center; margin: 0 auto 14px; border-radius: 50%; color: #286444; background: #e7f3eb; }
 .result-modal.error .result-symbol { color: #813936; background: #fff0ed; }
@@ -192,6 +196,7 @@ td small.bank-cell { display: block; color: #5d6b79; font-size: 9px; margin-top:
   .topbar { height: 54px; padding: 0 15px; }
   .breadcrumb { font-size: 10px; }
   .top-actions .secondary { display: inline-flex; width: 34px; height: 34px; padding: 0; flex: 0 0 34px; font-size: 0; }
+  .top-actions .cloud-access span { display: none; }
   .page { padding: 25px 14px; }
   .page-heading { align-items: flex-start; gap: 12px; }
   .page-heading h1 { font-size: 23px; }

@@ -20,6 +20,8 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [user, setUser] = useState<{ id: string; email?: string } | null>(null)
   const [authOpen, setAuthOpen] = useState(false)
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
+  const [authStatus, setAuthStatus] = useState<{ kind: 'error' | 'success'; text: string } | null>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -126,18 +128,62 @@ export default function App() {
     }
   }
 
-  async function signIn(event: React.FormEvent) {
-    event.preventDefault(); if (!supabase) return
-    setBusy(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    setBusy(false)
-    if (error) setMessage(`No se pudo iniciar sesión: ${error.message}`); else { setAuthOpen(false); setMessage('Sesión iniciada.') }
+  function openAuth(mode: 'signin' | 'signup' = 'signin') {
+    setAuthMode(mode)
+    setAuthStatus(null)
+    setAuthOpen(true)
   }
 
-  async function signUp() {
-    if (!supabase) return
-    setBusy(true); const { error } = await supabase.auth.signUp({ email, password }); setBusy(false)
-    setMessage(error ? `No se pudo crear la cuenta: ${error.message}` : 'Cuenta creada. Revisa tu correo para confirmar el registro.')
+  async function submitAuth(event: React.FormEvent) {
+    event.preventDefault()
+    if (!supabase) {
+      setAuthStatus({ kind: 'error', text: 'Supabase no está configurado en esta instalación. Puedes continuar guardando en este dispositivo.' })
+      return
+    }
+    setBusy(true)
+    setAuthStatus(null)
+    try {
+      if (authMode === 'signin') {
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+        if (error) {
+          const text = error.code === 'email_not_confirmed'
+            ? 'Tu correo aún no está confirmado. Abre el enlace que Supabase envió y luego vuelve a iniciar sesión.'
+            : error.code === 'invalid_credentials'
+              ? 'No se pudo validar el acceso. Revisa correo y contraseña; si acabas de registrarte, confirma primero tu correo.'
+              : error.message
+          setAuthStatus({ kind: 'error', text })
+          return
+        }
+        setAuthOpen(false)
+        setMessage('Sesión iniciada. Tus comprobantes se cargarán desde la nube.')
+        return
+      }
+
+      const { data, error } = await supabase.auth.signUp({ email: email.trim(), password })
+      if (error) {
+        if (['user_already_exists', 'email_exists', 'identity_already_exists'].includes(error.code ?? '')) {
+          setAuthMode('signin')
+          setAuthStatus({ kind: 'error', text: 'Ese correo ya tiene una cuenta. Inicia sesión con su contraseña.' })
+        } else setAuthStatus({ kind: 'error', text: error.message })
+        return
+      }
+      if (data.user && !data.session && data.user.identities?.length === 0) {
+        setAuthMode('signin')
+        setAuthStatus({ kind: 'error', text: 'Ese correo ya tiene una cuenta. Inicia sesión con su contraseña.' })
+        return
+      }
+      if (data.session) {
+        setAuthOpen(false)
+        setMessage('Cuenta creada e inicio de sesión realizado.')
+      } else {
+        setAuthMode('signin')
+        setAuthStatus({ kind: 'success', text: 'Registro recibido. Supabase exige confirmar el correo: abre el enlace enviado a tu bandeja y luego inicia sesión.' })
+      }
+    } catch {
+      setAuthStatus({ kind: 'error', text: 'No se pudo conectar con Supabase. Comprueba la conexión a Internet e inténtalo otra vez.' })
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function signOut() { await supabase?.auth.signOut(); setMessage('Sesión cerrada.') }
@@ -159,13 +205,13 @@ export default function App() {
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><FileCheck2 size={23} strokeWidth={2.1} /><span className="brand-mark-accent" /></div><div><b>MicroFacturas</b><small>Control de comprobantes</small></div></div>
       <div className="side-label">ESPACIO DE TRABAJO</div><div className="nav-item active"><span className="nav-dot" />Comprobantes <span className="nav-count">{records.length}</span></div>
-      <div className="sidebar-bottom"><div className="storage-card"><div className="storage-icon"><ShieldCheck size={18} /></div><b>{supabase ? (user ? 'Cuenta conectada' : 'Modo local') : 'Modo local'}</b><p>{supabase ? (user ? user.email : 'Inicia sesión para respaldar en la nube') : 'Tus imágenes y datos se guardan en este dispositivo.'}</p>{supabase && (user ? <button className="text-button" onClick={() => void signOut()}><LogOut size={14} /> Cerrar sesión</button> : <button className="text-button" onClick={() => setAuthOpen(true)}><LogIn size={14} /> Iniciar sesión</button>)}</div><div className="user-chip"><div className="avatar">{user?.email?.[0]?.toUpperCase() ?? 'L'}</div><div><b>{user?.email ?? 'Usuario local'}</b><small>{user ? 'Sesión en la nube' : 'Solo en este dispositivo'}</small></div></div></div>
+      <div className="sidebar-bottom"><div className="storage-card"><div className="storage-icon"><ShieldCheck size={18} /></div><b>{supabase ? (user ? 'Cuenta conectada' : 'Modo local') : 'Nube no configurada'}</b><p>{supabase ? (user ? user.email : 'Inicia sesión para el respaldo en la nube') : 'Tus datos seguirán disponibles localmente.'}</p>{supabase && (user ? <button className="text-button" onClick={() => void signOut()}><LogOut size={14} /> Cerrar sesión</button> : <button type="button" className="text-button" onClick={() => openAuth()}><LogIn size={14} /> Conectar a la nube</button>)}</div><div className="user-chip"><div className="avatar">{user?.email?.[0]?.toUpperCase() ?? 'L'}</div><div><b>{user?.email ?? 'Usuario local'}</b><small>{user ? 'Sesión en la nube' : 'Solo en este dispositivo'}</small></div></div></div>
     </aside>
     <main className="main-content">
-      <header className="topbar"><div className="breadcrumb">Espacio de trabajo <span>/</span> <b>Comprobantes</b></div><div className="top-actions">{supabase && !user && <button className="button secondary small" aria-label="Conectar a la nube" onClick={() => setAuthOpen(true)}><Cloud size={16} /> Conectar nube</button>}<button className="button primary small" onClick={() => fileInput.current?.click()}><Plus size={17} /> Nuevo comprobante</button></div></header>
+      <header className="topbar"><div className="breadcrumb">Espacio de trabajo <span>/</span> <b>Comprobantes</b></div><div className="top-actions">{!user && <button type="button" className="button secondary small cloud-access" aria-label="Conectar a la nube" onClick={() => openAuth()}><Cloud size={16} /><span>Conectar a la nube</span></button>}{user && <span className="cloud-user-label"><Cloud size={15} /> Nube conectada</span>}<button className="button primary small" onClick={() => fileInput.current?.click()}><Plus size={17} /> Nuevo comprobante</button></div></header>
       <section className="page">
         <div className="page-heading"><div><div className="eyebrow">REGISTRO DE PAGOS</div><h1>Comprobantes</h1><p className="subheading">Digitaliza, revisa y organiza los pagos de tus puntos de venta.</p></div><button className="button outline" onClick={exportExcel} disabled={!records.length}><ArrowDownToLine size={17} /> Exportar Excel</button></div>
-      <section className="app-banner" aria-label="Resumen de MicroFacturas"><div className="banner-icon animated-receipt"><ReceiptText size={27} strokeWidth={1.8} /><span className="receipt-coin">Bs</span></div><div className="banner-copy"><div className="banner-eyebrow">GESTIÓN DE PUNTOS DE VENTA</div><h2>Facturación organizada, sin complicaciones</h2><p>Registra comprobantes desde el teléfono o la computadora. Revisa cada dato y guarda tu información.</p></div><div className={`banner-sync ${user ? 'connected' : ''}`}><div className="banner-sync-icon"><Cloud size={17} /></div><div><b>{user ? 'Respaldo en la nube activo' : 'Guardado local activo'}</b><small>{user ? user.email : supabase ? 'Inicia sesión para respaldo en la nube' : 'En este navegador; también funciona en PC'}</small></div>{supabase && !user && <button className="banner-connect" onClick={() => setAuthOpen(true)}>Conectar</button>}</div></section>
+      <section className="app-banner" aria-label="Resumen de MicroFacturas"><div className="banner-icon animated-receipt"><ReceiptText size={27} strokeWidth={1.8} /><span className="receipt-coin">Bs</span></div><div className="banner-copy"><div className="banner-eyebrow">GESTIÓN DE PUNTOS DE VENTA</div><h2>Facturación organizada, sin complicaciones</h2><p>Registra comprobantes desde el teléfono o la computadora. Revisa cada dato y guarda tu información.</p></div><div className={`banner-sync ${user ? 'connected' : ''}`}><div className="banner-sync-icon"><Cloud size={17} /></div><div><b>{user ? 'Respaldo en la nube activo' : 'Guardado local activo'}</b><small>{user ? user.email : supabase ? 'Inicia sesión para respaldo en la nube' : 'En este navegador; también funciona en PC'}</small></div>{!user && <button type="button" className="banner-connect" onClick={() => openAuth()}>Conectar</button>}</div></section>
         {message && <div className={`notice ${/guardado|sesión iniciada/i.test(message) ? 'success' : /no se pudo|no se completó|no se pudieron/i.test(message) ? 'error' : ''}`} role="status"><span>{message}</span><button aria-label="Cerrar aviso" onClick={() => setMessage('')}><X size={15} /></button></div>}
         <div className="stats-row"><div className="stat-card"><span className="stat-icon blue"><FileSpreadsheet size={19} /></span><div><small>Comprobantes registrados</small><b>{records.length}</b></div><span className="stat-foot">En este dispositivo</span></div><div className="stat-card"><span className="stat-icon green"><span className="bolivar">Bs</span></span><div><small>Monto acumulado</small><b>{money.format(total)}</b></div><span className="stat-foot">Total registrado</span></div><div className="stat-card cloud-stat"><span className="stat-icon violet"><Cloud size={19} /></span><div><small>Respaldo en la nube</small><b>{user ? 'Conectado' : 'Desconectado'}</b></div><span className="stat-foot">{user ? 'Sincroniza al guardar' : 'Inicia sesión para activar'}</span></div></div>
         <section className="records-panel"><div className="panel-heading"><div><h2>Todos los comprobantes</h2><p>Consulta los pagos registrados recientemente.</p></div><label className="search-box"><Search size={16} /><input placeholder="Buscar por número, local..." value={query} onChange={(event) => setQuery(event.target.value)} /></label></div>
@@ -177,6 +223,6 @@ export default function App() {
     <input ref={fileInput} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { void chooseImage(event.target.files?.[0]); event.currentTarget.value = '' }} />
     {modal && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setModal(false)}><section className="receipt-modal"><div className="modal-header"><div><div className="eyebrow">NUEVO REGISTRO</div><h2>Revisar comprobante</h2></div><button className="icon-button" onClick={() => setModal(false)} aria-label="Cerrar"><X size={19} /></button></div><ol className="flow-steps" aria-label="Pasos del registro"><li className="complete"><span><Check size={12} /></span> Foto</li><li className="current"><span>2</span> Revisión</li><li><span>3</span> Guardado</li></ol><div className="modal-content"><div className="photo-column"><div className="photo-frame">{draft.image ? <img src={draft.image} alt="Foto del comprobante" /> : <div className="photo-placeholder"><ImagePlus size={28} /></div>}</div><button type="button" className="replace-photo" onClick={() => fileInput.current?.click()}><Upload size={15} /> Cambiar imagen</button>{ocrBusy && <div className="ocr-status"><LoaderCircle size={16} className="spin" /><span>Leyendo comprobante… {Math.round(progress * 100)}%</span></div>}{!ocrBusy && <div className="ocr-done"><Check size={15} /> Lectura en el dispositivo</div>}</div><form id="receipt-form" onSubmit={(event) => void saveReceipt(event)}><div className="form-intro"><Sparkles size={16} /><span>Confirma los datos detectados y completa los campos pendientes</span></div><label>Fecha<input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} required /><small className="field-hint">Si no se detecta en la foto, usamos la fecha de hoy; puedes corregirla.</small></label><label>Número de comprobante<input value={draft.receiptNumber} onChange={(e) => setDraft({ ...draft, receiptNumber: e.target.value })} placeholder="Ej. 00458291" /></label><label>Local<input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} placeholder="Nombre del local" /></label><div className="form-grid"><label>Monto (Bs.)<input type="number" min="0" step="0.01" value={draft.amount || ''} onChange={(e) => setDraft({ ...draft, amount: Number(e.target.value) })} placeholder="0,00" required /></label><label>Banco / tarjeta<input list="venezuelan-banks" value={draft.bank} onChange={(e) => setDraft({ ...draft, bank: e.target.value })} placeholder="Busca o escribe un banco" /><datalist id="venezuelan-banks">{venezuelanBanks.map(({ name }) => <option key={name} value={name} />)}</datalist></label></div></form></div><div className="modal-footer"><span><ShieldCheck size={15} />{user ? 'Se guardará local y en Supabase' : 'Se guardará en este dispositivo'}</span><button type="button" className="button secondary" onClick={() => setModal(false)}>Cancelar</button><button type="submit" form="receipt-form" className="button primary" disabled={saving || ocrBusy}>{saving ? <LoaderCircle size={16} className="spin" /> : <Check size={16} />}{saving ? 'Guardando…' : 'Guardar comprobante'}</button></div></section></div>}
     {saveResult && <div className="modal-backdrop"><section className={`result-modal ${saveResult.kind}`} role="dialog" aria-modal="true" aria-labelledby="result-title"><div className="result-symbol">{saveResult.kind === 'error' ? <X size={26} /> : <Check size={26} />}</div><div className="eyebrow">CONFIRMACIÓN DE REGISTRO</div><h2 id="result-title">{saveResult.kind === 'cloud' ? 'Comprobante guardado' : saveResult.kind === 'local' ? 'Comprobante guardado en este dispositivo' : 'No se pudo guardar'}</h2><p>{saveResult.kind === 'cloud' ? 'El registro y la imagen quedaron guardados en Supabase y en este navegador.' : saveResult.kind === 'local' ? saveResult.detail || 'El registro quedó guardado en este navegador. Para compartirlo entre PC y teléfono, inicia sesión en Supabase antes de guardar futuros comprobantes.' : saveResult.detail || 'Ocurrió un error al guardar el comprobante.'}</p><button className="button primary" onClick={() => { setSaveResult(null); setMessage(saveResult.kind === 'cloud' ? 'Guardado y sincronizado con Supabase.' : 'Guardado solo en este dispositivo.') }}>Entendido</button></section></div>}
-    {authOpen && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAuthOpen(false)}><section className="auth-modal"><div className="modal-header"><div><div className="eyebrow">RESPALDO EN LA NUBE</div><h2>Inicia sesión</h2></div><button className="icon-button" onClick={() => setAuthOpen(false)}><X size={19} /></button></div><p className="auth-copy">Usa tu cuenta para guardar los comprobantes en tu espacio privado de Supabase.</p><form onSubmit={(event) => void signIn(event)}><label>Correo electrónico<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="tu@correo.com" /></label><label>Contraseña<input type="password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Mínimo 6 caracteres" /></label><button className="button primary full" disabled={busy}>{busy ? <LoaderCircle size={16} className="spin" /> : <LogIn size={16} />} Iniciar sesión</button><button type="button" className="create-account" disabled={busy} onClick={() => void signUp()}>Crear una cuenta nueva</button></form></section></div>}
+    {authOpen && <div className="modal-backdrop auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAuthOpen(false)}><section className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title"><div className="modal-header"><div><div className="eyebrow">RESPALDO EN LA NUBE</div><h2 id="auth-title">{authMode === 'signin' ? 'Inicia sesión' : 'Crear cuenta'}</h2></div><button type="button" className="icon-button" onClick={() => setAuthOpen(false)} aria-label="Cerrar"><X size={19} /></button></div><p className="auth-copy">{authMode === 'signin' ? 'Accede con tu cuenta para respaldar y consultar comprobantes desde este PC y tu teléfono.' : 'Crea una cuenta con tu correo. Te enviaremos un enlace para confirmar el registro.'}</p>{authStatus && <div className={`auth-status ${authStatus.kind}`} role="status">{authStatus.text}</div>}<form onSubmit={(event) => void submitAuth(event)}><label>Correo electrónico<input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="tu@correo.com" /></label><label>Contraseña<input type="password" autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'} minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Mínimo 6 caracteres" /></label><button type="submit" className="button primary full" disabled={busy}>{busy ? <LoaderCircle size={16} className="spin" /> : authMode === 'signin' ? <LogIn size={16} /> : <Check size={16} />}{busy ? 'Conectando…' : authMode === 'signin' ? 'Iniciar sesión' : 'Crear cuenta'}</button><button type="button" className="create-account" disabled={busy} onClick={() => { setAuthMode(authMode === 'signin' ? 'signup' : 'signin'); setAuthStatus(null) }}>{authMode === 'signin' ? '¿No tienes cuenta? Crear una cuenta' : 'Ya tengo cuenta · Iniciar sesión'}</button></form></section></div>}
   </div>
 }
