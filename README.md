@@ -32,7 +32,7 @@ La interfaz está en español, es adaptable a móviles y escritorio y usa una pa
 
 - Node.js 20 o superior.
 - Un navegador moderno. Para probar la captura desde el teléfono, el navegador puede abrir el selector de cámara al cargar una imagen.
-- Opcional: un proyecto Supabase para habilitar cuentas y respaldo en la nube.
+- El proyecto MicroFacturas ya incluye la URL y la clave pública del proyecto Supabase de la aplicación; las credenciales de usuario siguen siendo necesarias para ver y guardar comprobantes privados.
 
 ## Ejecución local
 
@@ -60,17 +60,16 @@ Abre desde el teléfono `http://IP-LOCAL-DE-LA-COMPUTADORA:5173/`. La computador
 
 ## Configurar Supabase
 
-1. Crea un proyecto en Supabase.
-2. En **SQL Editor**, ejecuta [`supabase/schema.sql`](supabase/schema.sql). El script crea `public.receipts`, índices, políticas RLS, el bucket privado y las políticas de acceso a las imágenes.
-3. En **Authentication → Sign-in methods**, habilita Email/Password.
-4. Copia `.env.example` a `.env.local` y completa la URL del proyecto y su clave pública (`sb_publishable_...` o la clave `anon` del proyecto):
+1. En **SQL Editor**, ejecuta [`supabase/schema.sql`](supabase/schema.sql) en el proyecto configurado. El script crea `public.receipts`, índices, políticas RLS, el bucket privado y las políticas de acceso a las imágenes.
+2. En **Authentication → Sign-in methods**, habilita Email/Password.
+3. Para apuntar a otro proyecto, copia `.env.example` a `.env.local` y completa la URL y la clave pública (`sb_publishable_...` o la clave `anon`):
 
 ```dotenv
 VITE_SUPABASE_URL=https://TU-PROYECTO.supabase.co
 VITE_SUPABASE_ANON_KEY=TU_CLAVE_PUBLICA
 ```
 
-5. Reinicia el servidor de desarrollo.
+4. Reinicia el servidor de desarrollo después de cambiar esas variables.
 
 No pongas una clave `service_role` en el navegador ni en variables `VITE_*`. `.env.local` está excluido de Git. Las cuentas las administra Supabase Auth; no se crea una tabla de contraseñas propia.
 
